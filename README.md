@@ -1,2 +1,2 @@
 # web-ultimate-tic-tac-toe
-Creating a web verison of Ultimate Tic Tac Tow
+Creating a web version of Ultimate Tic Tac Tow
