@@ -40,6 +40,14 @@ body {
     background-color: #b1b1b1;
 }
 
+.cell.allowed {
+    background-color: #fff3a0;
+}
+
+.cell.allowed:hover {
+    background-color: #e6d96b;
+}
+
 h1 {
     color: #333;
     margin-bottom: 10px;
