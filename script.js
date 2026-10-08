@@ -181,6 +181,274 @@ function endGame(message) {
     statusElement.textContent = message;
 }
 
+// ---------------------------------------------------------------------------
+// AI: minimax with alpha-beta pruning
+//
+// Searching the whole game is impossible (81 spots), so the search is
+// depth-limited and uses iterative deepening: it searches 1 move ahead, then 2,
+// then 3... until the time budget runs out, and plays the best move from the
+// last depth it fully finished. Positions at the depth limit are scored by
+// evaluate() instead of by who won.
+// ---------------------------------------------------------------------------
+
+const AI_TIME_LIMIT_MS = 1000;  // Raise for a harder AI, lower for a faster one
+const AI_MAX_DEPTH = 12;
+const WIN_SCORE = 100000;
+
+const EMPTY = 0;
+const HUMAN = 1;
+const COMPUTER = 2;
+
+// The search uses its own light-weight board so it can place and undo moves
+// quickly without touching the page. Index 0 is unused (spots/grids are 1-based).
+const searchCells = new Uint8Array(82);   // EMPTY, HUMAN or COMPUTER for each spot
+const searchOwner = new Uint8Array(10);   // Who has claimed each grid
+const searchFilled = new Uint8Array(10);  // How many spots are used in each grid
+
+// Same winning lines as gridPattern but with 0-8 offsets inside a grid
+const localLines = gridPattern.map(line => line.map(spot => spot - 1));
+
+// Trying the center, then corners, then edges first helps alpha-beta prune more
+const MOVE_ORDER = [4, 0, 2, 6, 8, 1, 3, 5, 7];
+
+// How much owning each grid is worth (center > corners > edges)
+const GRID_VALUE = [0, 50, 40, 50, 40, 60, 40, 50, 40, 50];
+
+function gridOf(spot) {
+    return Math.floor((spot - 1) / 9) + 1;
+}
+
+// Copies the real game into the search board
+function syncSearchState() {
+    searchCells.fill(EMPTY);
+    searchOwner.fill(EMPTY);
+    searchFilled.fill(0);
+
+    for (const spot of playerPositions) {
+        searchCells[spot] = HUMAN;
+        searchFilled[gridOf(spot)]++;
+    }
+    for (const spot of aiPositions) {
+        searchCells[spot] = COMPUTER;
+        searchFilled[gridOf(spot)]++;
+    }
+    for (const gridNumber of claimedGrids) {
+        searchOwner[gridNumber] = whoTookGrid(gridNumber) === "Player" ? HUMAN : COMPUTER;
+    }
+}
+
+// Places a move, returns true if it won its grid (needed to undo it)
+function makeMove(spot, who) {
+    const gridNumber = gridOf(spot);
+    searchCells[spot] = who;
+    searchFilled[gridNumber]++;
+
+    if (searchOwner[gridNumber] === EMPTY) {
+        const base = (gridNumber - 1) * 9 + 1;
+        for (const [a, b, c] of localLines) {
+            if (searchCells[base + a] === who && searchCells[base + b] === who && searchCells[base + c] === who) {
+                searchOwner[gridNumber] = who;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function undoMove(spot, wonGrid) {
+    const gridNumber = gridOf(spot);
+    searchCells[spot] = EMPTY;
+    searchFilled[gridNumber]--;
+    if (wonGrid) {
+        searchOwner[gridNumber] = EMPTY;
+    }
+}
+
+// A grid is finished if someone claimed it or all 9 spots are used
+function isSearchGridFull(gridNumber) {
+    return searchOwner[gridNumber] !== EMPTY || searchFilled[gridNumber] === 9;
+}
+
+function searchWinner() {
+    for (const [a, b, c] of gridPattern) {
+        const owner = searchOwner[a];
+        if (owner !== EMPTY && owner === searchOwner[b] && owner === searchOwner[c]) {
+            return owner;
+        }
+    }
+    return EMPTY;
+}
+
+// Same rule as allowedSpots(): play in the grid matching the last spot,
+// or anywhere if that grid is already finished
+function searchMoves(previousMove) {
+    const moves = [];
+    const target = previousMove === null ? 0 : forcedGrid(previousMove);
+
+    for (const gridOrder of MOVE_ORDER) {
+        const gridNumber = gridOrder + 1;
+        if (target !== 0 && !isSearchGridFull(target) && gridNumber !== target) {
+            continue;
+        }
+        if (isSearchGridFull(gridNumber)) {
+            continue;
+        }
+        const base = (gridNumber - 1) * 9 + 1;
+        for (const spotOrder of MOVE_ORDER) {
+            if (searchCells[base + spotOrder] === EMPTY) {
+                moves.push(base + spotOrder);
+            }
+        }
+    }
+    return moves;
+}
+
+// Guesses how good a position is for the AI when the search can't go any deeper.
+// Positive is good for the AI, negative is good for the Player.
+function evaluate() {
+    let score = 0;
+
+    for (let gridNumber = 1; gridNumber <= 9; gridNumber++) {
+        const owner = searchOwner[gridNumber];
+        if (owner === COMPUTER) {
+            score += GRID_VALUE[gridNumber];
+        } else if (owner === HUMAN) {
+            score -= GRID_VALUE[gridNumber];
+        } else if (searchFilled[gridNumber] < 9) {
+            // Unclaimed grid: reward lines the AI could still finish and punish the Player's
+            const base = (gridNumber - 1) * 9 + 1;
+            for (const [a, b, c] of localLines) {
+                let ai = 0, human = 0;
+                for (const offset of [a, b, c]) {
+                    const mark = searchCells[base + offset];
+                    if (mark === COMPUTER) ai++;
+                    else if (mark === HUMAN) human++;
+                }
+                if (human === 0 && ai > 0) score += ai === 2 ? 6 : 1;
+                if (ai === 0 && human > 0) score -= human === 2 ? 6 : 1;
+            }
+        }
+    }
+
+    // Lines of grids across the big board
+    for (const line of gridPattern) {
+        let ai = 0, human = 0, open = 0;
+        for (const gridNumber of line) {
+            if (searchOwner[gridNumber] === COMPUTER) ai++;
+            else if (searchOwner[gridNumber] === HUMAN) human++;
+            else if (searchFilled[gridNumber] < 9) open++;
+        }
+        if (human === 0 && ai + open === 3) score += ai === 2 ? 80 : ai === 1 ? 10 : 0;
+        if (ai === 0 && human + open === 3) score -= human === 2 ? 80 : human === 1 ? 10 : 0;
+    }
+
+    return score;
+}
+
+let searchDeadline = 0;
+let searchTimedOut = false;
+let searchNodes = 0;
+
+// Same idea as the standard minimax: the AI maximizes the score, the Player minimizes it.
+// alpha = best score the AI is already guaranteed, beta = best score the Player is
+// already guaranteed. Once alpha >= beta this branch can't change the result, so we stop.
+function minimax(aiTurn, depth, depthLimit, previousMove, alpha, beta) {
+    // Checking the clock every so often so the AI never freezes the page
+    if ((++searchNodes & 1023) === 0 && performance.now() > searchDeadline) {
+        searchTimedOut = true;
+    }
+    if (searchTimedOut) {
+        return 0;
+    }
+
+    // Someone won the game: faster wins score higher, slower losses score higher
+    const winner = searchWinner();
+    if (winner === COMPUTER) {
+        return WIN_SCORE - depth;
+    }
+    if (winner === HUMAN) {
+        return -WIN_SCORE + depth;
+    }
+
+    const moves = searchMoves(previousMove);
+    if (moves.length === 0) {
+        return 0; // Draw
+    }
+    if (depth >= depthLimit) {
+        return evaluate();
+    }
+
+    let bestScore = aiTurn ? -Infinity : Infinity;
+
+    for (const spot of moves) {
+        const wonGrid = makeMove(spot, aiTurn ? COMPUTER : HUMAN);
+        const score = minimax(!aiTurn, depth + 1, depthLimit, spot, alpha, beta);
+        undoMove(spot, wonGrid);
+
+        if (aiTurn) {
+            bestScore = Math.max(bestScore, score);
+            alpha = Math.max(alpha, bestScore);
+        } else {
+            bestScore = Math.min(bestScore, score);
+            beta = Math.min(beta, bestScore);
+        }
+
+        if (alpha >= beta) {
+            break; // Pruned: the other side would never let the game get here
+        }
+    }
+    return bestScore;
+}
+
+// Picks the AI's move from the spots it is allowed to play
+function chooseAiMove(choices) {
+    syncSearchState();
+
+    // Shuffled so equally good moves don't always play out the same game
+    let moves = choices.slice().sort(() => Math.random() - 0.5);
+    let bestMove = moves[0];
+
+    searchDeadline = performance.now() + AI_TIME_LIMIT_MS;
+    searchTimedOut = false;
+    searchNodes = 0;
+
+    for (let depthLimit = 1; depthLimit <= AI_MAX_DEPTH; depthLimit++) {
+        let iterationBest = null;
+        let iterationScore = -Infinity;
+        let alpha = -Infinity;
+
+        for (const spot of moves) {
+            const wonGrid = makeMove(spot, COMPUTER);
+            const score = minimax(false, 1, depthLimit, spot, alpha, Infinity);
+            undoMove(spot, wonGrid);
+
+            if (searchTimedOut) {
+                break;
+            }
+            if (score > iterationScore) {
+                iterationScore = score;
+                iterationBest = spot;
+            }
+            alpha = Math.max(alpha, iterationScore);
+        }
+
+        // Ran out of time mid-depth, so keep the last fully searched answer
+        if (searchTimedOut) {
+            break;
+        }
+
+        bestMove = iterationBest;
+        // Searching the best move first at the next depth makes pruning much stronger
+        moves = [bestMove, ...moves.filter(spot => spot !== bestMove)];
+
+        // Found a forced win (or every move loses), searching deeper won't change anything
+        if (Math.abs(iterationScore) > WIN_SCORE - 1000) {
+            break;
+        }
+    }
+    return bestMove;
+}
+
 function aiTurn() {
     const choices = allowedSpots(lastMove);
     if (choices.length === 0) {
@@ -188,7 +456,7 @@ function aiTurn() {
         return;
     }
 
-    const aiPosition = choices[Math.floor(Math.random() * choices.length)];
+    const aiPosition = chooseAiMove(choices);
     placement(aiPosition, "AI");
     checkingAllGrids();
     lastMove = aiPosition;
@@ -247,7 +515,8 @@ function handlePlayerClick(position) {
     }
 
     statusElement.textContent = "The AI is now thinking";
-    setTimeout(aiTurn, 500);
+    // Short delay so "The AI is now thinking" is drawn before the search starts
+    setTimeout(aiTurn, 100);
 }
 
 // Hooks every cell on the page up to its spot number
