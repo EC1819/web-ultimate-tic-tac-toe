@@ -38,7 +38,15 @@ function getCellElement(position) {
 }
 
 function drawCell(position) {
-    getCellElement(position).textContent = gameBoard[position].trim();
+    const cell = getCellElement(position);
+    const symbol = gameBoard[position].trim();
+    cell.textContent = symbol;
+    cell.classList.remove("x", "o");
+    if (symbol === "X") {
+        cell.classList.add("x");
+    } else if (symbol === "O") {
+        cell.classList.add("o");
+    }
 }
 
 function placement(position, user) {
@@ -71,6 +79,10 @@ function resettingGrid(gridNumber) {
         gameBoard[spot] = symbol;
         drawCell(spot);
     }
+
+    const subBoard = subBoards[gridNumber - 1];
+    subBoard.dataset.winner = symbol;
+    subBoard.classList.add("won", symbol === "X" ? "won-x" : "won-o");
 }
 
 function checkingAllGrids() {
