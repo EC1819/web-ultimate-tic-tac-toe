@@ -1,60 +1,179 @@
+:root {
+    --bg: #1c1c1c;
+    --card-bg: #ffffff;
+    --board-bg: #1c1c1c;
+    --sub-board-bg: #303030;
+    --cell-bg: #ffffff;
+    --cell-hover: #ececec;
+    --allowed-bg: #fff3a0;
+    --allowed-hover: #ffe680;
+    --allowed-ring: #eab308;
+    --x-color: #e4002b;
+    --o-color: #0057e7;
+    --text-color: #111111;
+}
+
+* {
+    box-sizing: border-box;
+}
+
 body {
-    font-family: Arial, sans-serif;
+    margin: 0;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 40px;
-    background-color: darkgray;
+    justify-content: center;
+    padding: 40px 16px;
+    font-family: 'Poppins', Arial, sans-serif;
+    background: var(--bg);
+}
+
+.game-container {
+    background: var(--card-bg);
+    border-radius: 24px;
+    padding: 32px 40px 40px;
+    box-shadow: 0 0 60px rgba(255, 255, 255, 0.08);
+    text-align: center;
+}
+
+h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text-color);
+}
+
+.subtitle {
+    margin: 2px 0 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#status {
+    display: inline-block;
+    min-height: 20px;
+    margin: 0 0 24px;
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color);
+    background: #f2f2f2;
+    border-radius: 999px;
+    transition: background-color 0.2s ease;
 }
 
 #ultimate-board {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(3, 1fr);
-    gap: 10px;
-    background-color: #222;
-    padding: 10px;
-    margin-top: 20px;
+    gap: 8px;
+    background: var(--board-bg);
+    padding: 8px;
+    border-radius: 16px;
 }
 
 .sub-board {
+    position: relative;
     display: grid;
-    grid-template-columns: repeat(3, 70px);
-    grid-template-rows: repeat(3, 70px);
-    gap: 5px;
-    background-color: #333;
-    padding: 5px;
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(3, 56px);
+    gap: 4px;
+    background: var(--sub-board-bg);
+    padding: 4px;
+    border-radius: 10px;
+    transition: background-color 0.3s ease;
 }
 
 .cell {
-    width: 70px;
-    height: 70px;
-    background-color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    background-color: var(--cell-bg);
     border: none;
-    font-size: 32px;
-    font-weight: bold;
+    border-radius: 6px;
+    font-size: 26px;
+    font-weight: 700;
     cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.1s ease;
 }
 
 .cell:hover {
-    background-color: #b1b1b1;
+    background-color: var(--cell-hover);
+}
+
+.cell:active {
+    transform: scale(0.92);
+}
+
+.cell.x {
+    color: var(--x-color);
+}
+
+.cell.o {
+    color: var(--o-color);
 }
 
 .cell.allowed {
-    background-color: #fff3a0;
+    background-color: var(--allowed-bg);
+    box-shadow: inset 0 0 0 2px var(--allowed-ring);
 }
 
 .cell.allowed:hover {
-    background-color: #e6d96b;
+    background-color: var(--allowed-hover);
 }
 
-h1 {
-    color: #333;
-    margin-bottom: 10px;
+/* Once a sub-board is won it's locked and shows a big watermark of the winner */
+.sub-board.won {
+    pointer-events: none;
 }
 
-#status {
-    font-size: 18px;
-    color: #555;
-    margin-bottom: 10px;
+.sub-board.won::after {
+    content: attr(data-winner);
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 68px;
+    font-weight: 800;
+    border-radius: 10px;
+}
+
+.sub-board.won-x::after {
+    color: var(--x-color);
+    background-color: rgba(228, 0, 43, 0.15);
+}
+
+.sub-board.won-o::after {
+    color: var(--o-color);
+    background-color: rgba(0, 87, 231, 0.15);
+}
+
+@media (max-width: 480px) {
+    .game-container {
+        padding: 24px 16px 32px;
+        border-radius: 18px;
+    }
+
+    .sub-board {
+        grid-template-columns: repeat(3, 32px);
+        grid-template-rows: repeat(3, 32px);
+    }
+
+    .cell {
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+    }
+
+    .sub-board.won::after {
+        font-size: 38px;
+    }
 }
