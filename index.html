@@ -13,6 +13,13 @@
     <div class="game-container">
         <h1>Ultimate Tic Tac Toe</h1>
         <p class="subtitle">by Emmanuel (Manny) Canizales </p>
+        <div class="controls">
+            <div class="mode-toggle" role="group" aria-label="Game mode">
+                <button type="button" class="mode-btn active" data-mode="ai" aria-pressed="true">Play vs AI</button>
+                <button type="button" class="mode-btn" data-mode="friend" aria-pressed="false">Play vs Friend</button>
+            </div>
+            <button type="button" id="new-game" class="new-game-btn">New Game</button>
+        </div>
         <p id="status">Your turn</p>
         <div id="ultimate-board">
         <div class="sub-board" data-board="0">
