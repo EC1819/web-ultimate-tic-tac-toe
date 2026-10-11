@@ -26,9 +26,20 @@ const gameBoard = new Array(82).fill(' ');
 const statusElement = document.getElementById("status");
 const subBoards = document.querySelectorAll(".sub-board");
 
+const modeButtons = document.querySelectorAll(".mode-btn");
+const newGameButton = document.getElementById("new-game");
+
 let lastMove = null;
 let gameOver = false;
 let playerTurn = true;
+
+// "ai" = Player vs the computer, "friend" = two people sharing the screen.
+// In friend mode the second person takes the "AI" slot (O), so all the board
+// logic below works the same for both modes.
+let gameMode = "ai";
+// Who places the next mark: "Player" (X) or "AI" (O). Only changes in friend mode.
+let currentMover = "Player";
+let aiTimeout = null;
 
 // Converts a spot number (1-81) into its cell element on the page
 function getCellElement(position) {
@@ -111,9 +122,9 @@ function getGridLines(gridNumber) {
 function winCondition() {
     for (const metaLine of gridPattern) {
         if (allWonBy(metaLine, "Player")) {
-            return "Congrats you won";
+            return gameMode === "ai" ? "Congrats you won" : "Player 1 (X) wins!";
         } else if (allWonBy(metaLine, "AI")) {
-            return "The A.I wins";
+            return gameMode === "ai" ? "The A.I wins" : "Player 2 (O) wins!";
         }
     }
     if (isBoardFull()) {
@@ -461,7 +472,41 @@ function chooseAiMove(choices) {
     return bestMove;
 }
 
+// Marks the spot the AI just played so the player can see where it went
+function markAiMove(position) {
+    clearAiMove();
+    getCellElement(position).classList.add("ai-last-move");
+}
+
+function clearAiMove() {
+    document.querySelectorAll(".cell.ai-last-move").forEach(cell => cell.classList.remove("ai-last-move"));
+}
+
+// Shows whose turn it is next and where they may play, given the move just made
+function beginTurn(previousMove) {
+    const choices = allowedSpots(previousMove);
+    if (choices.length === 0) {
+        endGame("Draw");
+        return;
+    }
+
+    const symbol = currentMover === "Player" ? "X" : "O";
+    let who = "You";
+    if (gameMode === "friend") {
+        who = currentMover === "Player" ? "Player 1 (X)" : "Player 2 (O)";
+    }
+
+    const targetGrid = forcedGrid(previousMove);
+    if (isGridFull(targetGrid)) {
+        statusElement.textContent = who + " may place anywhere on the board";
+    } else {
+        statusElement.textContent = who + " must place an " + symbol + " in grid " + targetGrid;
+    }
+    highlightSpots(choices);
+}
+
 function aiTurn() {
+    aiTimeout = null;
     const choices = allowedSpots(lastMove);
     if (choices.length === 0) {
         endGame("Draw");
@@ -470,6 +515,7 @@ function aiTurn() {
 
     const aiPosition = chooseAiMove(choices);
     placement(aiPosition, "AI");
+    markAiMove(aiPosition);
     checkingAllGrids();
     lastMove = aiPosition;
 
@@ -480,18 +526,7 @@ function aiTurn() {
     }
 
     // Player movement
-    const targetGrid = forcedGrid(aiPosition);
-    const playerChoices = allowedSpots(aiPosition);
-    if (playerChoices.length === 0) {
-        endGame("Draw");
-        return;
-    }
-    if (isGridFull(targetGrid)) {
-        statusElement.textContent = "You may place anywhere on the board";
-    } else {
-        statusElement.textContent = "You must place an X in grid " + targetGrid;
-    }
-    highlightSpots(playerChoices);
+    beginTurn(aiPosition);
     playerTurn = true;
 }
 
@@ -500,7 +535,7 @@ function handlePlayerClick(position) {
         return;
     }
 
-    // The very first move can go anywhere, after that the AI's last move decides
+    // The very first move can go anywhere, after that the previous move decides
     if (lastMove !== null) {
         const playerChoices = allowedSpots(lastMove);
         if (!playerChoices.includes(position)) {
@@ -514,11 +549,11 @@ function handlePlayerClick(position) {
         }
     }
 
-    playerTurn = false;
-    placement(position, "Player");
+    placement(position, currentMover);
     checkingAllGrids();
     lastMove = position;
     highlightSpots([]);
+    clearAiMove();
 
     const result = winCondition();
     if (result !== "") {
@@ -526,10 +561,68 @@ function handlePlayerClick(position) {
         return;
     }
 
+    if (gameMode === "friend") {
+        currentMover = currentMover === "Player" ? "AI" : "Player";
+        beginTurn(position);
+        return;
+    }
+
+    playerTurn = false;
     statusElement.textContent = "The AI is now thinking";
     // Short delay so "The AI is now thinking" is drawn before the search starts
-    setTimeout(aiTurn, 100);
+    aiTimeout = setTimeout(aiTurn, 100);
 }
+
+function startMessage() {
+    if (gameMode === "friend") {
+        return "Player 1 (X) starts: place an X anywhere (spots 1-81)";
+    }
+    return "The Player can start by placing an X anywhere (spots 1-81)";
+}
+
+// Wipes the board and starts a fresh game in the given mode
+function resetGame(mode) {
+    if (aiTimeout !== null) {
+        clearTimeout(aiTimeout);
+        aiTimeout = null;
+    }
+
+    gameMode = mode;
+    playerPositions.length = 0;
+    aiPositions.length = 0;
+    claimedGrids.length = 0;
+    gameBoard.fill(" ");
+    lastMove = null;
+    gameOver = false;
+    playerTurn = true;
+    currentMover = "Player";
+
+    subBoards.forEach(subBoard => {
+        subBoard.classList.remove("won", "won-x", "won-o");
+        delete subBoard.dataset.winner;
+        Array.from(subBoard.children).forEach(cell => {
+            cell.textContent = "";
+            cell.classList.remove("x", "o", "allowed", "ai-last-move");
+        });
+    });
+
+    modeButtons.forEach(button => {
+        const selected = button.dataset.mode === mode;
+        button.classList.toggle("active", selected);
+        button.setAttribute("aria-pressed", String(selected));
+    });
+    statusElement.textContent = startMessage();
+}
+
+modeButtons.forEach(button => {
+    button.addEventListener("click", () => {
+        // Picking the mode you're already in leaves the current game alone
+        if (button.dataset.mode !== gameMode) {
+            resetGame(button.dataset.mode);
+        }
+    });
+});
+newGameButton.addEventListener("click", () => resetGame(gameMode));
 
 // Hooks every cell on the page up to its spot number
 subBoards.forEach((subBoard, gridIndex) => {
@@ -539,4 +632,4 @@ subBoards.forEach((subBoard, gridIndex) => {
     });
 });
 
-statusElement.textContent = "The Player can start by placing an X anywhere (spots 1-81)";
+statusElement.textContent = startMessage();
