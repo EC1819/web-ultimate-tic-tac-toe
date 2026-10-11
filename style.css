@@ -8,6 +8,8 @@
     --allowed-bg: #fff3a0;
     --allowed-hover: #ffe680;
     --allowed-ring: #eab308;
+    --ai-move-bg: #cfe2ff;
+    --ai-move-ring: #0057e7;
     --x-color: #e4002b;
     --o-color: #0057e7;
     --text-color: #111111;
@@ -52,6 +54,58 @@ h1 {
     color: #9ca3af;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 0 0 16px;
+}
+
+.mode-toggle {
+    display: inline-flex;
+    padding: 3px;
+    background: #f2f2f2;
+    border-radius: 999px;
+}
+
+.mode-btn,
+.new-game-btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mode-btn {
+    padding: 8px 16px;
+    color: #6b7280;
+    background: transparent;
+}
+
+.mode-btn.active {
+    color: #ffffff;
+    background: var(--bg);
+}
+
+.mode-btn:not(.active):hover {
+    color: var(--text-color);
+}
+
+.new-game-btn {
+    padding: 10px 16px;
+    color: var(--text-color);
+    background: #f2f2f2;
+}
+
+.new-game-btn:hover {
+    background: #e2e2e2;
 }
 
 #status {
@@ -127,6 +181,22 @@ h1 {
 
 .cell.allowed:hover {
     background-color: var(--allowed-hover);
+}
+
+/* Marks the spot the AI played last (cleared when the player moves) */
+.cell.ai-last-move {
+    background-color: var(--ai-move-bg);
+    box-shadow: inset 0 0 0 3px var(--ai-move-ring);
+    animation: ai-pop 0.4s ease;
+}
+
+.cell.ai-last-move:hover {
+    background-color: var(--ai-move-bg);
+}
+
+@keyframes ai-pop {
+    0% { transform: scale(1.25); }
+    100% { transform: scale(1); }
 }
 
 /* Once a sub-board is won it's locked and shows a big watermark of the winner */
